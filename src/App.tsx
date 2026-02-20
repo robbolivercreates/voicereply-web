@@ -16,14 +16,13 @@ import type { TranscriptionMode, OutputLanguage, RecordingState, HistoryItem, Re
 function App() {
   const [mode, setMode] = useState<TranscriptionMode>('text')
   const [recordingState, setRecordingState] = useState<RecordingState>('idle')
-  const [result, setResult] = useState<string | null>(null)
+  // accumulate last 4 messages
+  const [messages, setMessages] = useState<Array<{ result: string; transcription: string | null }>>([])
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [history, setHistory] = useState<HistoryItem[]>([])
-  const [transcription, setTranscription] = useState<string | null>(null)
-  const [commandText] = useState('')
   const [screenshot, setScreenshot] = useState<string | null>(null)
   const [replyStyle, setReplyStyle] = useState<ReplyStyle>('friendly')
 
@@ -58,19 +57,15 @@ function App() {
   const handleRecordingComplete = useCallback(async (audioBlob: Blob) => {
     setRecordingState('processing')
     setError(null)
-    setResult(null)
-    setTranscription(null)
 
     try {
       const audioBase64 = await blobToBase64(audioBlob)
       const outputLanguage = (localStorage.getItem('vibeflow-language') as OutputLanguage) || 'en'
       const clarifyText = localStorage.getItem('vibeflow-clarify') === 'true'
-      const selectedText = undefined // command mode removed
 
       const response = await generateResponse({
         audio: audioBase64,
         mode,
-        selectedText,
         outputLanguage,
         clarifyText,
         screenshot: mode === 'social' ? screenshot || undefined : undefined,
@@ -78,13 +73,16 @@ function App() {
       })
 
       if (response.success && response.result) {
-        setResult(response.result)
-        if (response.transcription) setTranscription(response.transcription)
+        // Add to messages array, keep last 4
+        setMessages((prev) => [
+          ...prev.slice(-3),
+          { result: response.result!, transcription: response.transcription ?? null },
+        ])
         playSuccessSound()
 
         try {
           await navigator.clipboard.writeText(response.result)
-          showToast('Copied to clipboard!')
+          showToast('Copied!')
         } catch {
           showToast('Reply generated!')
         }
@@ -108,21 +106,22 @@ function App() {
     } finally {
       setRecordingState('idle')
     }
-  }, [mode, commandText, screenshot, replyStyle, showToast])
+  }, [mode, screenshot, replyStyle, showToast])
 
   const handleCopy = useCallback(async () => {
-    if (result) {
+    const last = messages[messages.length - 1]
+    if (last?.result) {
       try {
-        await navigator.clipboard.writeText(result)
+        await navigator.clipboard.writeText(last.result)
         showToast('Copied!')
       } catch {
         showToast('Failed to copy', 'error')
       }
     }
-  }, [result, showToast])
+  }, [messages, showToast])
 
   const loadFromHistory = useCallback((item: HistoryItem) => {
-    setResult(item.result)
+    setMessages([{ result: item.result, transcription: null }])
     setMode(item.mode)
     setShowHistory(false)
   }, [])
@@ -145,8 +144,8 @@ function App() {
                 replyStyle={replyStyle}
                 onReplyStyleChange={setReplyStyle}
                 disabled={recordingState !== 'idle'}
-                result={result}
-                transcription={transcription}
+                result={messages[messages.length - 1]?.result ?? null}
+                transcription={messages[messages.length - 1]?.transcription ?? null}
                 isLoading={recordingState === 'processing'}
                 onCopy={handleCopy}
               />
@@ -156,8 +155,7 @@ function App() {
               />
             ) : (
               <ResponseDisplay
-                response={result}
-                transcription={transcription}
+                messages={messages}
                 mode={mode}
                 error={error}
                 isLoading={recordingState === 'processing'}
