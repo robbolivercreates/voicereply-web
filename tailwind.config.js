@@ -7,28 +7,48 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: {
-          50: '#eef2ff',
-          100: '#e0e7ff',
-          200: '#c7d2fe',
-          300: '#a5b4fc',
-          400: '#818cf8',
-          500: '#6366f1',
-          600: '#4f46e5',
-          700: '#4338ca',
-          800: '#3730a3',
-          900: '#312e81',
-          950: '#1e1b4b',
+        chassis: {
+          DEFAULT: '#e8e4d9', // Aged beige plastic
+          dark: '#dcd8cc',
+          darker: '#bfbkb0',
+        },
+        speaker: {
+          DEFAULT: '#2a2a2a', // Dark grill
+          light: '#3a3a3a',
+        },
+        tape: {
+          window: '#1a1a1a', // Smoky dark plastic
+          spool: '#ffffff',
+          body: '#333333',
+        },
+        brand: {
+          gold: '#d4af37', // Vintage gold text
+          red: '#cc0000', // Recording LED/Button
         }
       },
+      fontFamily: {
+        serif: ['"Playfair Display"', 'serif'],
+        mono: ['"Courier Prime"', 'monospace'],
+        sans: ['"Inter"', 'sans-serif'],
+      },
+      backgroundImage: {
+        'brushed-metal': 'linear-gradient(180deg, #e8e8e8 0%, #d0d0d0 100%)',
+        'knob-metal': 'conic-gradient(#f0f0f0, #d0d0d0, #f0f0f0, #d0d0d0, #f0f0f0)',
+      },
+      boxShadow: {
+        'deep': '0 10px 30px -5px rgba(0, 0, 0, 0.5)',
+        'button-pressed': 'inset 0 2px 4px rgba(0,0,0,0.3)',
+        'button-raised': '0 4px 0 #b0b0b0, 0 8px 10px rgba(0,0,0,0.3)',
+      },
       animation: {
-        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'recording': 'recording 1.5s ease-in-out infinite',
+        'spin-slow': 'spin 3s linear infinite',
+        'tape-run': 'spin 4s linear infinite',
+        'vu-bounce': 'vuBounce 0.2s ease-in-out',
       },
       keyframes: {
-        recording: {
-          '0%, 100%': { transform: 'scale(1)', opacity: '1' },
-          '50%': { transform: 'scale(1.1)', opacity: '0.8' },
+        vuBounce: {
+          '0%, 100%': { transform: 'rotate(0deg)' },
+          '50%': { transform: 'rotate(5deg)' },
         }
       }
     },

@@ -1,5 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
-import { Image, Camera, Clipboard, X, Upload, MessageCircle } from 'lucide-react'
+import { Camera, X, Copy, Check } from 'lucide-react'
+import { playClickSound } from '../lib/sounds'
 import type { ReplyStyle, ReplyStyleOption } from '../types'
 
 interface SocialModePanelProps {
@@ -8,58 +9,20 @@ interface SocialModePanelProps {
   replyStyle: ReplyStyle
   onReplyStyleChange: (style: ReplyStyle) => void
   disabled?: boolean
+  result?: string | null
+  transcription?: string | null
+  isLoading?: boolean
+  onCopy?: () => void
 }
 
 const replyStyles: ReplyStyleOption[] = [
-  {
-    id: 'flirty',
-    label: 'Flirty',
-    emoji: '😏',
-    description: 'Playful and teasing',
-    color: 'from-pink-500 to-rose-500',
-  },
-  {
-    id: 'engaging',
-    label: 'Engaging',
-    emoji: '✨',
-    description: 'Keeps the conversation going',
-    color: 'from-amber-500 to-orange-500',
-  },
-  {
-    id: 'professional',
-    label: 'Professional',
-    emoji: '💼',
-    description: 'Polished and respectful',
-    color: 'from-blue-500 to-indigo-500',
-  },
-  {
-    id: 'friendly',
-    label: 'Friendly',
-    emoji: '😊',
-    description: 'Warm and casual',
-    color: 'from-green-500 to-emerald-500',
-  },
-  {
-    id: 'witty',
-    label: 'Witty',
-    emoji: '😎',
-    description: 'Clever and humorous',
-    color: 'from-purple-500 to-violet-500',
-  },
-  {
-    id: 'assertive',
-    label: 'Assertive',
-    emoji: '💪',
-    description: 'Confident and direct',
-    color: 'from-red-500 to-rose-600',
-  },
-  {
-    id: 'supportive',
-    label: 'Supportive',
-    emoji: '🤗',
-    description: 'Empathetic and caring',
-    color: 'from-cyan-500 to-teal-500',
-  },
+  { id: 'flirty', label: 'Flirty', emoji: '😏', description: 'Playful', color: 'text-pink-600' },
+  { id: 'engaging', label: 'Engaging', emoji: '✨', description: 'Active', color: 'text-amber-600' },
+  { id: 'professional', label: 'Pro', emoji: '💼', description: 'Polished', color: 'text-blue-600' },
+  { id: 'friendly', label: 'Friendly', emoji: '😊', description: 'Warm', color: 'text-emerald-600' },
+  { id: 'witty', label: 'Witty', emoji: '😎', description: 'Clever', color: 'text-purple-600' },
+  { id: 'assertive', label: 'Direct', emoji: '💪', description: 'Bold', color: 'text-red-600' },
+  { id: 'supportive', label: 'Caring', emoji: '🤗', description: 'Kind', color: 'text-teal-600' },
 ]
 
 export function SocialModePanel({
@@ -68,239 +31,197 @@ export function SocialModePanel({
   replyStyle,
   onReplyStyleChange,
   disabled = false,
+  result,
+  transcription,
+  isLoading,
+  onCopy,
 }: SocialModePanelProps) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = () => {
+    playClickSound()
+    onCopy?.()
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isDragging, setIsDragging] = useState(false)
 
-  // Handle paste from clipboard
+  // ... (Keep existing paste/drop handlers logic, simplified for brevity in replacement if exact logic is same)
+  // Re-implementing handlers for safety
+
+  const processImageFile = useCallback(async (file: File) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const base64 = (e.target?.result as string)?.split(',')[1]
+      if (base64) onScreenshotChange(base64)
+    }
+    reader.readAsDataURL(file)
+  }, [onScreenshotChange])
+
   useEffect(() => {
     const handlePaste = async (e: ClipboardEvent) => {
       if (disabled) return
-
       const items = e.clipboardData?.items
       if (!items) return
-
       for (const item of items) {
         if (item.type.startsWith('image/')) {
           e.preventDefault()
           const file = item.getAsFile()
-          if (file) {
-            await processImageFile(file)
-          }
+          if (file) await processImageFile(file)
           break
         }
       }
     }
-
     window.addEventListener('paste', handlePaste)
     return () => window.removeEventListener('paste', handlePaste)
-  }, [disabled])
+  }, [disabled, processImageFile])
 
-  const processImageFile = async (file: File) => {
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const base64 = (e.target?.result as string)?.split(',')[1]
-      if (base64) {
-        onScreenshotChange(base64)
-      }
-    }
-    reader.readAsDataURL(file)
-  }
-
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) {
-      processImageFile(file)
-    }
-  }, [])
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-    if (disabled) return
-
-    const file = e.dataTransfer.files[0]
-    if (file && file.type.startsWith('image/')) {
-      processImageFile(file)
-    }
-  }, [disabled])
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    if (!disabled) {
-      setIsDragging(true)
-    }
-  }, [disabled])
-
-  const handleDragLeave = useCallback(() => {
-    setIsDragging(false)
-  }, [])
-
-  const handleScreenCapture = async () => {
-    if (disabled) return
-
-    try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { displaySurface: 'window' } as MediaTrackConstraints,
-      })
-
-      const video = document.createElement('video')
-      video.srcObject = stream
-      await video.play()
-
-      const canvas = document.createElement('canvas')
-      canvas.width = video.videoWidth
-      canvas.height = video.videoHeight
-      canvas.getContext('2d')?.drawImage(video, 0, 0)
-
-      stream.getTracks().forEach(track => track.stop())
-
-      const base64 = canvas.toDataURL('image/png').split(',')[1]
-      onScreenshotChange(base64)
-    } catch (err) {
-      console.error('Screen capture failed:', err)
-    }
+    if (file) processImageFile(file)
   }
 
-  const handlePasteFromClipboard = async () => {
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
     if (disabled) return
+    const file = e.dataTransfer.files[0]
+    if (file && file.type.startsWith('image/')) processImageFile(file)
+  }
 
-    try {
-      const items = await navigator.clipboard.read()
-      for (const item of items) {
-        const imageType = item.types.find(type => type.startsWith('image/'))
-        if (imageType) {
-          const blob = await item.getType(imageType)
-          const reader = new FileReader()
-          reader.onload = (e) => {
-            const base64 = (e.target?.result as string)?.split(',')[1]
-            if (base64) {
-              onScreenshotChange(base64)
-            }
-          }
-          reader.readAsDataURL(blob)
-          break
-        }
-      }
-    } catch (err) {
-      console.error('Clipboard read failed:', err)
-    }
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    if (!disabled) setIsDragging(true)
   }
 
   return (
-    <div className={`space-y-6 ${disabled ? 'opacity-60 pointer-events-none' : ''}`}>
-      {/* Screenshot Upload Area */}
-      <div className="card-premium rounded-2xl p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Image className="w-5 h-5 text-pink-400" />
-          <h3 className="font-medium text-white/90">Conversation Screenshot</h3>
-        </div>
+    <div className={`flex flex-col gap-5 ${disabled ? 'opacity-60 pointer-events-none' : ''}`}>
 
+      {/* Upload Zone */}
+      <div
+        className={`
+          relative rounded-2xl border-2 border-dashed transition-all duration-300 overflow-hidden cursor-pointer group
+          ${isDragging
+            ? 'border-accent bg-accent/5 shadow-[0_0_20px_rgba(245,158,11,0.2)]'
+            : 'border-divider hover:border-accent/40 hover:bg-white/[0.02]'
+          }
+          ${screenshot ? 'border-solid border-white/10 aspect-video' : 'aspect-video'}
+        `}
+        onClick={() => !screenshot && fileInputRef.current?.click()}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={() => setIsDragging(false)}
+      >
         {screenshot ? (
-          <div className="relative group">
+          <>
             <img
               src={`data:image/png;base64,${screenshot}`}
-              alt="Conversation screenshot"
-              className="w-full max-h-64 object-contain rounded-xl border border-white/10"
+              alt="Screenshot"
+              className="w-full h-full object-cover rounded-2xl"
             />
-            <button
-              onClick={() => onScreenshotChange(null)}
-              className="absolute top-2 right-2 p-2 rounded-full bg-black/60 hover:bg-black/80 transition-colors opacity-0 group-hover:opacity-100"
-            >
-              <X className="w-4 h-4 text-white" />
-            </button>
-          </div>
-        ) : (
-          <div
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            className={`
-              relative border-2 border-dashed rounded-xl p-8 text-center transition-all duration-300
-              ${isDragging
-                ? 'border-pink-500 bg-pink-500/10'
-                : 'border-white/10 hover:border-white/20 hover:bg-white/5'
-              }
-            `}
-          >
-            <Upload className="w-10 h-10 text-white/30 mx-auto mb-4" />
-            <p className="text-white/60 mb-2">
-              Drop a screenshot here, or paste with <kbd className="px-2 py-0.5 rounded bg-white/10 text-white/80 text-sm">Cmd+V</kbd>
-            </p>
-            <p className="text-white/40 text-sm mb-4">PNG, JPG up to 10MB</p>
-
-            <div className="flex flex-wrap items-center justify-center gap-2">
+            {/* Overlay on hover */}
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl">
               <button
-                onClick={() => fileInputRef.current?.click()}
-                className="btn-secondary text-sm py-2 px-4 flex items-center gap-2"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  playClickSound()
+                  onScreenshotChange(null)
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-full border border-white/20 bg-black/60 text-white text-[10px] font-mono tracking-widest uppercase hover:bg-black/80 transition-colors"
               >
-                <Image className="w-4 h-4" />
-                Browse
-              </button>
-              <button
-                onClick={handlePasteFromClipboard}
-                className="btn-secondary text-sm py-2 px-4 flex items-center gap-2"
-              >
-                <Clipboard className="w-4 h-4" />
-                Paste
-              </button>
-              <button
-                onClick={handleScreenCapture}
-                className="btn-secondary text-sm py-2 px-4 flex items-center gap-2"
-              >
-                <Camera className="w-4 h-4" />
-                Capture
+                <X className="w-3.5 h-3.5" />
+                Remove
               </button>
             </div>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
+          </>
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-4">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-colors duration-300 ${isDragging ? 'border-accent/60 bg-accent/10' : 'border-divider bg-white/5'}`}>
+              <Camera className={`w-5 h-5 transition-colors duration-300 ${isDragging ? 'text-accent' : 'text-text-muted'}`} />
+            </div>
+            <div className="text-center">
+              <p className="text-[11px] font-sans font-medium text-text-muted tracking-wide">
+                Drop image, paste, or <span className="text-accent underline underline-offset-2">browse</span>
+              </p>
+              <p className="text-[9px] font-mono text-text-muted/40 tracking-widest uppercase mt-1">Optional Context</p>
+            </div>
           </div>
         )}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileSelect}
+          className="hidden"
+        />
       </div>
 
       {/* Reply Style Selector */}
-      <div className="card-premium rounded-2xl p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <MessageCircle className="w-5 h-5 text-purple-400" />
-          <h3 className="font-medium text-white/90">Reply Style</h3>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+      <div className="flex flex-col gap-2">
+        <span className="text-[9px] font-mono tracking-[0.25em] text-text-muted/50 uppercase text-center">Reply Tone</span>
+        <div className="flex flex-wrap justify-center gap-1.5">
           {replyStyles.map((style) => (
             <button
               key={style.id}
-              onClick={() => onReplyStyleChange(style.id)}
+              onClick={() => {
+                playClickSound()
+                onReplyStyleChange(style.id)
+              }}
               className={`
-                reply-style-chip flex items-center gap-2 p-3 rounded-xl text-left
+                px-3 py-1.5 rounded-full text-[9px] font-mono tracking-widest uppercase border transition-all duration-200
                 ${replyStyle === style.id
-                  ? `bg-gradient-to-r ${style.color} text-white shadow-lg`
-                  : 'glass glass-hover text-white/70'
+                  ? 'bg-accent/10 text-accent border-accent/30 shadow-[0_0_8px_rgba(245,158,11,0.15)]'
+                  : 'text-text-muted/60 border-divider/50 hover:border-divider hover:text-text-muted hover:bg-white/5'
                 }
               `}
+              title={style.description}
             >
-              <span className="text-lg">{style.emoji}</span>
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-sm truncate">{style.label}</div>
-              </div>
+              {style.emoji} {style.label}
             </button>
           ))}
         </div>
-
-        <p className="mt-4 text-sm text-white/40 text-center">
-          {replyStyles.find(s => s.id === replyStyle)?.description}
-        </p>
       </div>
 
-      {/* Instructions */}
-      <p className="text-center text-sm text-white/40">
-        Upload a screenshot, choose your style, then speak your thoughts
-      </p>
+      {/* ── Result / Loading / Transcription ── */}
+      {(result || transcription || isLoading) && (
+        <div className="flex flex-col gap-3 mt-2 border-t border-divider/40 pt-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+
+          {/* What you said */}
+          {transcription && (
+            <div className="flex flex-col gap-1 opacity-60">
+              <span className="text-[8px] font-mono tracking-[0.2em] text-text-muted uppercase">You said</span>
+              <p className="text-[12px] font-mono text-text-muted italic">"{transcription}"</p>
+            </div>
+          )}
+
+          {/* Generated reply */}
+          {result && (
+            <div className="relative bg-accent/5 border border-accent/20 rounded-2xl p-4">
+              <span className="text-[8px] font-mono tracking-[0.2em] text-accent uppercase block mb-2">Your Reply</span>
+              <p className="text-[13px] font-mono text-text-main leading-loose pr-8 whitespace-pre-wrap">{result}</p>
+              <button
+                onClick={handleCopy}
+                className="absolute top-3 right-3 p-1.5 rounded-lg border border-transparent hover:border-accent/20 hover:bg-accent/5 transition-all"
+              >
+                {copied
+                  ? <Check className="w-4 h-4 text-accent" />
+                  : <Copy className="w-4 h-4 text-text-muted/50" />}
+              </button>
+            </div>
+          )}
+
+          {/* Loading */}
+          {isLoading && !result && (
+            <div className="flex items-center gap-2 text-text-muted/50">
+              <span className="inline-block w-1.5 h-3 bg-accent/40 animate-pulse rounded-sm" />
+              <span className="text-[10px] font-mono tracking-widest uppercase animate-pulse">Generating reply...</span>
+            </div>
+          )}
+        </div>
+      )}
+
     </div>
   )
 }

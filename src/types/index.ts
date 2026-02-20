@@ -1,5 +1,5 @@
 // Transcription modes for web app
-export type TranscriptionMode = 'text' | 'email' | 'command' | 'social';
+export type TranscriptionMode = 'text' | 'email' | 'social' | 'translate';
 
 export type OutputLanguage = 'en' | 'pt' | 'es';
 
@@ -49,7 +49,14 @@ export interface GenerateRequest {
 export interface GenerateResponse {
   success: boolean;
   result?: string;
+  transcription?: string;
   error?: string;
+}
+
+export interface TranslationResult {
+  translation: string;
+  fromLanguageName: string;
+  fromLanguageCode: string;
 }
 
 export interface HistoryItem {

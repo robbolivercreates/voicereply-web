@@ -1,5 +1,5 @@
-import { FileText, Mail, Wand2, MessageCircleHeart } from 'lucide-react'
 import type { TranscriptionMode } from '../types'
+import { playClickSound } from '../lib/sounds'
 
 interface ModeSelectorProps {
   selected: TranscriptionMode
@@ -10,84 +10,69 @@ interface ModeSelectorProps {
 interface ModeConfig {
   id: TranscriptionMode
   label: string
-  icon: React.ReactNode
-  description: string
-  color: string
 }
 
 // Available modes for web app
 const modes: ModeConfig[] = [
-  {
-    id: 'text',
-    label: 'Text',
-    icon: <FileText className="w-4 h-4" />,
-    description: 'Clean, well-formatted text',
-    color: 'from-emerald-500 to-green-500',
-  },
-  {
-    id: 'email',
-    label: 'Email',
-    icon: <Mail className="w-4 h-4" />,
-    description: 'Professional email formatting',
-    color: 'from-orange-500 to-amber-500',
-  },
-  {
-    id: 'command',
-    label: 'Command',
-    icon: <Wand2 className="w-4 h-4" />,
-    description: 'Transform pasted text with voice commands',
-    color: 'from-amber-500 to-yellow-500',
-  },
-  {
-    id: 'social',
-    label: 'Social',
-    icon: <MessageCircleHeart className="w-4 h-4" />,
-    description: 'Reply coach for conversations',
-    color: 'from-pink-500 to-rose-500',
-  },
+  { id: 'text', label: 'TXT' },
+  { id: 'email', label: 'MAIL' },
+  { id: 'command', label: 'CMD' },
+  { id: 'social', label: 'SOC' },
 ]
 
 export function StyleSelector({ selected, onSelect, disabled }: ModeSelectorProps) {
+  const selectedIndex = modes.findIndex(m => m.id === selected)
+
+  const handleSelect = (id: TranscriptionMode) => {
+    if (disabled) return
+    playClickSound()
+    onSelect(id)
+  }
+
   return (
-    <div className="card-premium rounded-2xl p-5">
-      <p className="text-sm text-white/50 mb-4 font-medium">Mode</p>
-      <div className="flex flex-wrap gap-2">
-        {modes.map((mode) => {
-          const isActive = selected === mode.id
-          return (
-            <button
+    <div className="flex flex-col items-center gap-2">
+      <span className="text-[10px] font-bold text-stone-500 tracking-widest uppercase">Mode Select</span>
+
+      <div className="relative p-1 bg-[#dcd8cc] rounded-lg border border-white/20 shadow-vintage-inset">
+
+        {/* Track */}
+        <div className="relative w-64 h-12 bg-[#1a1a1a] rounded flex items-center shadow-inner border-b border-white/10">
+
+          {/* Grooves for positions */}
+          {modes.map((mode) => (
+            <div key={mode.id} className="flex-1 h-full flex items-center justify-center border-r border-white/5 last:border-0 relative group cursor-pointer" onClick={() => handleSelect(mode.id)}>
+              {/* Click target */}
+              <div className="w-1 h-2 bg-stone-700 rounded-full opacity-50"></div>
+            </div>
+          ))}
+
+          {/* Moving Switch Knob */}
+          <div
+            className="absolute top-0.5 bottom-0.5 w-[24%] bg-stone-300 rounded shadow-[0_2px_5px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,0.5)] transition-all duration-300 ease-out border-b-2 border-stone-400 z-10 flex flex-col items-center justify-center gap-0.5 cursor-grab active:cursor-grabbing"
+            style={{
+              left: `${(selectedIndex / 4) * 100}%`,
+              transform: `translateX(${2 + selectedIndex * 2}px)` // Fine tune padding offset 
+            }}
+          >
+            {/* Grip texture */}
+            <div className="w-4 h-0.5 bg-stone-400 rounded-full"></div>
+            <div className="w-4 h-0.5 bg-stone-400 rounded-full"></div>
+            <div className="w-4 h-0.5 bg-stone-400 rounded-full"></div>
+          </div>
+        </div>
+
+        {/* Labels under track */}
+        <div className="flex justify-between px-4 mt-2 w-64">
+          {modes.map(mode => (
+            <span
               key={mode.id}
-              onClick={() => onSelect(mode.id)}
-              disabled={disabled}
-              className={`
-                group relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium
-                transition-all duration-300 ease-out
-                ${isActive
-                  ? `bg-gradient-to-r ${mode.color} text-white shadow-lg`
-                  : 'glass text-white/60 hover:text-white/90 hover:bg-white/5'
-                }
-                ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:scale-[1.02] active:scale-[0.98]'}
-              `}
-              title={mode.description}
+              className={`text-[10px] font-mono font-bold transition-colors duration-300 ${selected === mode.id ? 'text-stone-800' : 'text-stone-400'}`}
             >
-              <span className={`transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`}>
-                {mode.icon}
-              </span>
-              <span>{mode.label}</span>
-
-              {/* Active indicator */}
-              {isActive && (
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white" />
-              )}
-            </button>
-          )
-        })}
+              {mode.label}
+            </span>
+          ))}
+        </div>
       </div>
-
-      {/* Mode description */}
-      <p className="mt-4 text-xs text-white/40 text-center">
-        {modes.find(m => m.id === selected)?.description}
-      </p>
     </div>
   )
 }

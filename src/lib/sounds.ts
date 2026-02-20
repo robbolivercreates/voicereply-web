@@ -8,7 +8,50 @@ function getAudioContext(): AudioContext {
   return audioContext
 }
 
-function playTone(frequency: number, duration: number, type: OscillatorType = 'sine') {
+/** Sharp mechanical click using filtered noise burst */
+export function playClickSound() {
+  if (localStorage.getItem('vibeflow-sound') === 'false') return
+  try {
+    const ctx = getAudioContext()
+
+    // White noise buffer (very short)
+    const bufferSize = ctx.sampleRate * 0.008 // 8ms
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+    const data = buffer.getChannelData(0)
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1)
+    }
+
+    const source = ctx.createBufferSource()
+    source.buffer = buffer
+
+    // Band-pass filter gives it the "click" snap
+    const filter = ctx.createBiquadFilter()
+    filter.type = 'bandpass'
+    filter.frequency.value = 3200
+    filter.Q.value = 0.8
+
+    const gain = ctx.createGain()
+    gain.gain.setValueAtTime(1.2, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.012)
+
+    source.connect(filter)
+    filter.connect(gain)
+    gain.connect(ctx.destination)
+    source.start()
+    source.stop(ctx.currentTime + 0.015)
+  } catch {
+    // Ignore
+  }
+}
+
+function playTone(
+  frequency: number,
+  duration: number,
+  type: OscillatorType = 'sine',
+  volume = 0.25,
+  startDelay = 0
+) {
   try {
     const ctx = getAudioContext()
     const oscillator = ctx.createOscillator()
@@ -20,15 +63,13 @@ function playTone(frequency: number, duration: number, type: OscillatorType = 's
     oscillator.frequency.value = frequency
     oscillator.type = type
 
-    // Fade in
-    gainNode.gain.setValueAtTime(0, ctx.currentTime)
-    gainNode.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.01)
+    const t = ctx.currentTime + startDelay
+    gainNode.gain.setValueAtTime(0, t)
+    gainNode.gain.linearRampToValueAtTime(volume, t + 0.005)
+    gainNode.gain.linearRampToValueAtTime(0, t + duration)
 
-    // Fade out
-    gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + duration)
-
-    oscillator.start(ctx.currentTime)
-    oscillator.stop(ctx.currentTime + duration)
+    oscillator.start(t)
+    oscillator.stop(t + duration)
   } catch {
     // Audio not supported
   }
@@ -36,35 +77,28 @@ function playTone(frequency: number, duration: number, type: OscillatorType = 's
 
 export function playStartSound() {
   if (localStorage.getItem('vibeflow-sound') === 'false') return
-
-  // Rising tone - indicates start
-  playTone(440, 0.1, 'sine') // A4
-  setTimeout(() => playTone(554, 0.1, 'sine'), 80) // C#5
-  setTimeout(() => playTone(659, 0.15, 'sine'), 160) // E5
+  // Two-tone rising click → "armed"
+  playClickSound()
+  setTimeout(() => playTone(880, 0.06, 'sine', 0.15), 30)
 }
 
 export function playStopSound() {
   if (localStorage.getItem('vibeflow-sound') === 'false') return
-
-  // Falling tone - indicates stop/processing
-  playTone(659, 0.1, 'sine') // E5
-  setTimeout(() => playTone(554, 0.1, 'sine'), 80) // C#5
-  setTimeout(() => playTone(440, 0.15, 'sine'), 160) // A4
+  // Descending dull thud → "stopped"
+  playClickSound()
+  setTimeout(() => playTone(440, 0.08, 'sine', 0.12), 20)
 }
 
 export function playSuccessSound() {
   if (localStorage.getItem('vibeflow-sound') === 'false') return
-
-  // Happy chime - indicates success
-  playTone(523, 0.1, 'sine') // C5
-  setTimeout(() => playTone(659, 0.1, 'sine'), 100) // E5
-  setTimeout(() => playTone(784, 0.2, 'sine'), 200) // G5
+  // Soft two-note chime
+  playTone(784, 0.08, 'sine', 0.2)
+  setTimeout(() => playTone(1047, 0.12, 'sine', 0.2), 90)
 }
 
 export function playErrorSound() {
   if (localStorage.getItem('vibeflow-sound') === 'false') return
-
-  // Low buzz - indicates error
-  playTone(200, 0.15, 'square')
-  setTimeout(() => playTone(180, 0.2, 'square'), 150)
+  // Low buzz pair
+  playTone(220, 0.1, 'square', 0.15)
+  setTimeout(() => playTone(200, 0.12, 'square', 0.12), 130)
 }

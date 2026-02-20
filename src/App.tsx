@@ -1,20 +1,20 @@
+
 import { useState, useCallback, useEffect } from 'react'
-import { Settings, History, Sparkles } from 'lucide-react'
+import { Settings, List } from 'lucide-react'
 import { VoiceRecorder } from './components/VoiceRecorder'
-import { StyleSelector } from './components/StyleSelector'
-import { CommandInput } from './components/CommandInput'
+import { ModeSelector } from './components/ModeSelector'
 import { ResponseDisplay } from './components/ResponseDisplay'
+import { SocialModePanel } from './components/SocialModePanel'
+import { TranslationPanel } from './components/TranslationPanel'
 import { Toast } from './components/Toast'
 import { SettingsModal } from './components/SettingsModal'
 import { HistoryModal } from './components/HistoryModal'
-import { SocialModePanel } from './components/SocialModePanel'
 import { generateResponse } from './lib/api'
-import { playStartSound, playStopSound, playSuccessSound, playErrorSound } from './lib/sounds'
+import { playStartSound, playStopSound, playSuccessSound, playErrorSound, playClickSound } from './lib/sounds'
 import type { TranscriptionMode, OutputLanguage, RecordingState, HistoryItem, ReplyStyle } from './types'
 
 function App() {
   const [mode, setMode] = useState<TranscriptionMode>('text')
-  const [commandText, setCommandText] = useState('')
   const [recordingState, setRecordingState] = useState<RecordingState>('idle')
   const [result, setResult] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -22,24 +22,18 @@ function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [history, setHistory] = useState<HistoryItem[]>([])
-
-  // Social mode state
-  const [socialScreenshot, setSocialScreenshot] = useState<string | null>(null)
+  const [transcription, setTranscription] = useState<string | null>(null)
+  const [commandText] = useState('')
+  const [screenshot, setScreenshot] = useState<string | null>(null)
   const [replyStyle, setReplyStyle] = useState<ReplyStyle>('friendly')
 
-  // Load history from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('vibeflow-history')
     if (saved) {
-      try {
-        setHistory(JSON.parse(saved))
-      } catch {
-        // Ignore parse errors
-      }
+      try { setHistory(JSON.parse(saved)) } catch { /* */ }
     }
   }, [])
 
-  // Save history to localStorage
   useEffect(() => {
     localStorage.setItem('vibeflow-history', JSON.stringify(history.slice(0, 50)))
   }, [history])
@@ -49,13 +43,15 @@ function App() {
     setTimeout(() => setToast(null), 3000)
   }, [])
 
-  // Handle recording state changes with sound
+  const clearHistory = useCallback(() => {
+    setHistory([])
+    localStorage.removeItem('vibeflow-history')
+    showToast('History cleared')
+  }, [showToast])
+
   const handleRecordingStateChange = useCallback((newState: RecordingState) => {
-    if (newState === 'recording' && recordingState === 'idle') {
-      playStartSound()
-    } else if (newState === 'processing' && recordingState === 'recording') {
-      playStopSound()
-    }
+    if (newState === 'recording' && recordingState === 'idle') playStartSound()
+    else if (newState === 'processing' && recordingState === 'recording') playStopSound()
     setRecordingState(newState)
   }, [recordingState])
 
@@ -63,23 +59,13 @@ function App() {
     setRecordingState('processing')
     setError(null)
     setResult(null)
+    setTranscription(null)
 
     try {
-      // Convert audio to base64
       const audioBase64 = await blobToBase64(audioBlob)
-
-      // Get settings
       const outputLanguage = (localStorage.getItem('vibeflow-language') as OutputLanguage) || 'en'
       const clarifyText = localStorage.getItem('vibeflow-clarify') === 'true'
-
-      // Build selected text based on mode
-      let selectedText: string | undefined
-      if (mode === 'command') {
-        selectedText = commandText
-      } else if (mode === 'social' && socialScreenshot) {
-        // For social mode, pass screenshot and style info
-        selectedText = `[SCREENSHOT_BASE64]${socialScreenshot}[/SCREENSHOT_BASE64]\n[REPLY_STYLE]${replyStyle}[/REPLY_STYLE]`
-      }
+      const selectedText = undefined // command mode removed
 
       const response = await generateResponse({
         audio: audioBase64,
@@ -87,37 +73,28 @@ function App() {
         selectedText,
         outputLanguage,
         clarifyText,
-        // Pass screenshot directly for social mode
-        screenshot: mode === 'social' ? socialScreenshot || undefined : undefined,
+        screenshot: mode === 'social' ? screenshot || undefined : undefined,
         replyStyle: mode === 'social' ? replyStyle : undefined,
       })
 
       if (response.success && response.result) {
         setResult(response.result)
+        if (response.transcription) setTranscription(response.transcription)
         playSuccessSound()
 
-        // Auto-copy to clipboard
         try {
           await navigator.clipboard.writeText(response.result)
           showToast('Copied to clipboard!')
         } catch {
-          // Clipboard access denied, user can manually copy
           showToast('Reply generated!')
         }
 
-        // Add to history
-        const historyItem: HistoryItem = {
+        setHistory((prev: HistoryItem[]) => [{
           id: Date.now().toString(),
           timestamp: Date.now(),
-          result: response.result,
+          result: response.result!,
           mode,
-        }
-        setHistory(prev => [historyItem, ...prev])
-
-        // Clear inputs after successful operation
-        if (mode === 'command') {
-          setCommandText('')
-        }
+        }, ...prev])
       } else {
         setError(response.error || 'Failed to generate response')
         playErrorSound()
@@ -131,23 +108,18 @@ function App() {
     } finally {
       setRecordingState('idle')
     }
-  }, [mode, commandText, socialScreenshot, replyStyle, showToast])
+  }, [mode, commandText, screenshot, replyStyle, showToast])
 
   const handleCopy = useCallback(async () => {
     if (result) {
       try {
         await navigator.clipboard.writeText(result)
-        showToast('Copied to clipboard!')
+        showToast('Copied!')
       } catch {
         showToast('Failed to copy', 'error')
       }
     }
   }, [result, showToast])
-
-  const handleClear = useCallback(() => {
-    setResult(null)
-    setError(null)
-  }, [])
 
   const loadFromHistory = useCallback((item: HistoryItem) => {
     setResult(item.result)
@@ -156,145 +128,112 @@ function App() {
   }, [])
 
   return (
-    <div className="min-h-screen flex flex-col relative overflow-hidden">
-      {/* Animated Background Orbs */}
-      <div className="bg-orb bg-orb-1" />
-      <div className="bg-orb bg-orb-2" />
-      <div className="bg-orb bg-orb-3" />
+    <div className="h-[100dvh] w-full flex flex-col bg-body overflow-hidden relative">
 
-      {/* Header */}
-      <header className="glass border-b border-white/5 px-4 md:px-6 py-4 flex items-center justify-between sticky top-0 z-40">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg glow-primary">
-            <Sparkles className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold text-gradient">VibeFlow</h1>
-            <p className="text-xs text-white/40">Voice to Text AI</p>
+      {/* ── TOP: TEXT DISPLAY AREA ── */}
+      <div className="flex-1 w-full flex flex-col p-4 md:p-6 overflow-hidden z-10 pt-10">
+        <div className="flex-1 w-full max-w-2xl mx-auto flex flex-col overflow-hidden relative">
+
+          {/* Enclosure / Screen background */}
+          <div className="absolute inset-0 bg-screen rounded-[2rem] shadow-mechanical-inset border border-white/5 pointer-events-none" />
+
+          <div className="relative z-10 flex-1 flex flex-col p-5 md:p-7 overflow-y-auto scrollbar-hide">
+            {mode === 'social' ? (
+              <SocialModePanel
+                screenshot={screenshot}
+                onScreenshotChange={setScreenshot}
+                replyStyle={replyStyle}
+                onReplyStyleChange={setReplyStyle}
+                disabled={recordingState !== 'idle'}
+                result={result}
+                transcription={transcription}
+                isLoading={recordingState === 'processing'}
+                onCopy={handleCopy}
+              />
+            ) : mode === 'translate' ? (
+              <TranslationPanel
+                apiKey={localStorage.getItem('vibeflow-apikey')}
+              />
+            ) : (
+              <ResponseDisplay
+                response={result}
+                transcription={transcription}
+                mode={mode}
+                error={error}
+                isLoading={recordingState === 'processing'}
+                onCopy={handleCopy}
+              />
+            )}
           </div>
         </div>
+      </div>
 
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setShowHistory(true)}
-            className="p-2.5 rounded-xl hover:bg-white/5 transition-all duration-300 group"
-            title="History"
-          >
-            <History className="w-5 h-5 text-white/40 group-hover:text-white/80 transition-colors" />
-          </button>
-          <button
-            onClick={() => setShowSettings(true)}
-            className="p-2.5 rounded-xl hover:bg-white/5 transition-all duration-300 group"
-            title="Settings"
-          >
-            <Settings className="w-5 h-5 text-white/40 group-hover:text-white/80 transition-colors" />
-          </button>
-        </div>
-      </header>
+      {/* ── CENTER: PROMINENT BUTTON ── */}
+      <div className="flex-shrink-0 flex items-center justify-center py-4 md:py-8 z-20">
+        <VoiceRecorder
+          state={recordingState}
+          onStateChange={handleRecordingStateChange}
+          onRecordingComplete={handleRecordingComplete}
+        />
+      </div>
 
-      {/* Main Content */}
-      <main className="flex-1 p-4 md:p-8 max-w-2xl mx-auto w-full space-y-8 relative z-10">
-        {/* Mode Selector */}
-        <div className="animate-in" style={{ animationDelay: '0.1s' }}>
-          <StyleSelector
+      {/* ── BOTTOM: MINIMALIST SECONDARY CONTROLS ── */}
+      <div className="w-full pb-8 pt-2 px-6 flex flex-col items-center z-10">
+        <div className="flex w-full max-w-md justify-between items-center opacity-60 hover:opacity-100 transition-opacity duration-500">
+
+          <button
+            onClick={() => { playClickSound(); setShowHistory(true) }}
+            className="group flex flex-col items-center gap-1.5 p-2 active:scale-95 transition-transform"
+          >
+            <List className="w-5 h-5 text-text-muted group-hover:text-text-main transition-colors" />
+            <span className="text-[9px] font-sans font-bold tracking-widest text-text-muted group-hover:text-text-main uppercase">Logs</span>
+          </button>
+
+          <ModeSelector
             selected={mode}
             onSelect={setMode}
             disabled={recordingState !== 'idle'}
           />
-        </div>
 
-        {/* Command Mode Text Input */}
-        {mode === 'command' && (
-          <div className="animate-in" style={{ animationDelay: '0.15s' }}>
-            <CommandInput
-              value={commandText}
-              onChange={setCommandText}
-              disabled={recordingState !== 'idle'}
-            />
-          </div>
-        )}
-
-        {/* Social Mode Panel */}
-        {mode === 'social' && (
-          <div className="animate-in" style={{ animationDelay: '0.15s' }}>
-            <SocialModePanel
-              screenshot={socialScreenshot}
-              onScreenshotChange={setSocialScreenshot}
-              replyStyle={replyStyle}
-              onReplyStyleChange={setReplyStyle}
-              disabled={recordingState !== 'idle'}
-            />
-          </div>
-        )}
-
-        {/* Voice Recorder */}
-        <div className="animate-in" style={{ animationDelay: '0.2s' }}>
-          <VoiceRecorder
-            state={recordingState}
-            onStateChange={handleRecordingStateChange}
-            onRecordingComplete={handleRecordingComplete}
-          />
-        </div>
-
-        {/* Result Display */}
-        {(result || error || recordingState === 'processing') && (
-          <div className="animate-in">
-            <ResponseDisplay
-              response={result}
-              transcription={null}
-              error={error}
-              isLoading={recordingState === 'processing'}
-              onCopy={handleCopy}
-              onClear={handleClear}
-            />
-          </div>
-        )}
-      </main>
-
-      {/* Footer */}
-      <footer className="glass border-t border-white/5 px-4 py-4 text-center relative z-10">
-        <p className="text-sm text-white/30">
-          Powered by{' '}
-          <a
-            href="https://ai.google.dev"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-white/50 hover:text-white/70 transition-colors"
+          <button
+            onClick={() => { playClickSound(); setShowSettings(true) }}
+            className="group flex flex-col items-center gap-1.5 p-2 active:scale-95 transition-transform"
           >
-            Gemini AI
-          </a>
-        </p>
-      </footer>
+            <Settings className="w-5 h-5 text-text-muted group-hover:text-text-main transition-colors" />
+            <span className="text-[9px] font-sans font-bold tracking-widest text-text-muted group-hover:text-text-main uppercase">System</span>
+          </button>
+
+        </div>
+      </div>
 
       {/* Modals */}
-      {showSettings && (
-        <SettingsModal onClose={() => setShowSettings(false)} />
-      )}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+
       {showHistory && (
         <HistoryModal
           history={history}
           onClose={() => setShowHistory(false)}
           onSelect={loadFromHistory}
-          onClear={() => {
-            setHistory([])
-            showToast('History cleared')
-          }}
+          onClear={clearHistory}
         />
       )}
 
-      {/* Toast */}
-      {toast && <Toast message={toast.message} type={toast.type} />}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   )
 }
 
-async function blobToBase64(blob: Blob): Promise<string> {
+function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onloadend = () => {
-      const result = reader.result as string
-      // Remove the data URL prefix to get just the base64
-      const base64 = result.split(',')[1]
+      const base64 = (reader.result as string).split(',')[1]
       resolve(base64)
     }
     reader.onerror = reject
