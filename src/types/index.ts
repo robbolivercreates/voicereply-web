@@ -1,5 +1,5 @@
 // Transcription modes for web app
-export type TranscriptionMode = 'text' | 'email' | 'social' | 'translate';
+export type TranscriptionMode = 'text' | 'email' | 'social' | 'translate' | 'command';
 
 export type OutputLanguage = 'en' | 'pt' | 'es';
 

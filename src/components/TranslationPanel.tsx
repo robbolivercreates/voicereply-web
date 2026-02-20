@@ -30,7 +30,6 @@ export function TranslationPanel({ apiKey }: TranslationPanelProps) {
     const [targetLanguage, setTargetLanguage] = useState('English')
     const [translation, setTranslation] = useState('')
     const [detectedLang, setDetectedLang] = useState('')
-    const [detectedLangCode, setDetectedLangCode] = useState('')
     const [replyTranslation, setReplyTranslation] = useState('')
     const [error, setError] = useState<string | null>(null)
     const [copied, setCopied] = useState<'translation' | 'reply' | null>(null)
@@ -49,7 +48,6 @@ export function TranslationPanel({ apiKey }: TranslationPanelProps) {
             const result = await translateText(sourceText.trim(), targetLanguage, apiKey)
             setTranslation(result.translation)
             setDetectedLang(result.fromLanguageName)
-            setDetectedLangCode(result.fromLanguageCode)
             setPhase('translated')
             playSuccessSound()
         } catch (e) {
@@ -118,7 +116,6 @@ export function TranslationPanel({ apiKey }: TranslationPanelProps) {
         setSourceText('')
         setTranslation('')
         setDetectedLang('')
-        setDetectedLangCode('')
         setReplyTranslation('')
         setError(null)
         playClickSound()
