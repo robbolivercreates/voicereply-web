@@ -79,13 +79,7 @@ function App() {
           { result: response.result!, transcription: response.transcription ?? null },
         ])
         playSuccessSound()
-
-        try {
-          await navigator.clipboard.writeText(response.result)
-          showToast('Copied!')
-        } catch {
-          showToast('Reply generated!')
-        }
+        showToast('Reply generated! Tap message to copy.')
 
         setHistory((prev: HistoryItem[]) => [{
           id: Date.now().toString(),
